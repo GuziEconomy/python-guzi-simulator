@@ -2,25 +2,33 @@ import unittest
 from datetime import date
 from guzi.models import User
 
-from simulator.models import Simulator, UserGenerator
+from simulator.models import Simulator, UserGenerator, SimpleYearlyDeathGod, GrapheDrawer
 
 
 class TestUserGenerator(unittest.TestCase):
     """
     """
     def test_generate_user(self):
-        user_generator = UserGenerator()
+        user = UserGenerator.generate_user(date(2000, 1, 1))
 
-        user = user_generator.generate_random_user()
+        self.assertIsInstance(user, User)
+        self.assertEqual(user.birthdate, date(2000, 1, 1))
+
+    def test_generate_users(self):
+        users = UserGenerator.generate_users(date(2000, 1, 1), 10)
+
+        self.assertEqual(len(users), 10)
+
+    def test_generate_random_user(self):
+        user = UserGenerator.generate_random_user()
 
         self.assertIsInstance(user, User)
 
-    def test_generate_adult_user(self):
-        user_generator = UserGenerator()
+    def test_generate_random_adult_user(self):
         users = []
 
         for i in range(10):
-            users.append(user_generator.generate_random_adult_user())
+            users.append(UserGenerator.generate_random_adult_user())
 
         for user in users:
             self.assertTrue(user.age() >= 18, "User {} (born {}) is only {} years old".format(user.id, user.birthdate, user.age()))
@@ -35,10 +43,9 @@ class TestSimulator(unittest.TestCase):
         total_accumulated is always 0.
         """
         simulator = Simulator(date(2000, 1, 1))
-        user_generator = UserGenerator()
 
         for i in range(10):
-            simulator.add_user(user_generator.generate_random_adult_user())
+            simulator.add_user(UserGenerator.generate_random_adult_user())
 
         for i in range(10):
             self.assertEqual(len(simulator.user_pool[i].guzi_wallet), 0)
@@ -56,10 +63,9 @@ class TestSimulator(unittest.TestCase):
         bonuses to the users total_accumulated (which goes from 0 to 1)
         """
         simulator = Simulator(date(2000, 1, 1))
-        user_generator = UserGenerator()
 
         for i in range(10):
-            user = user_generator.generate_random_adult_user()
+            user = UserGenerator.generate_random_adult_user()
             user.balance.income.append("1234")
             simulator.add_user(user)
 
@@ -77,10 +83,9 @@ class TestSimulator(unittest.TestCase):
         total_accumulated of it's owner
         """
         simulator = Simulator(date(2000, 1, 1))
-        user_generator = UserGenerator()
 
         for i in range(10):
-            user = user_generator.generate_random_adult_user()
+            user = UserGenerator.generate_random_adult_user()
             user.create_daily_guzis(date(2000, 1, 1))
             simulator.add_user(user)
 
@@ -98,10 +103,9 @@ class TestSimulator(unittest.TestCase):
         total_accumulated is always 0.
         """
         simulator = Simulator(date(2000, 1, 1))
-        user_generator = UserGenerator()
 
         for i in range(10):
-            simulator.add_user(user_generator.generate_random_adult_user())
+            simulator.add_user(UserGenerator.generate_random_adult_user())
 
         for i in range(10):
             self.assertEqual(len(simulator.user_pool[i].guza_wallet), 0)
@@ -119,10 +123,9 @@ class TestSimulator(unittest.TestCase):
         guza_trashbin of it's owner
         """
         simulator = Simulator(date(2000, 1, 1))
-        user_generator = UserGenerator()
 
         for i in range(1):
-            simulator.add_user(user_generator.generate_random_adult_user())
+            simulator.add_user(UserGenerator.generate_random_adult_user())
 
         for i in range(1):
             self.assertEqual(len(simulator.user_pool[i].guza_wallet), 0)
@@ -138,10 +141,9 @@ class TestSimulator(unittest.TestCase):
 
     def test_new_day_multiple_times(self):
         simulator = Simulator(date(2000, 1, 1))
-        user_generator = UserGenerator()
 
         for i in range(10):
-            simulator.add_user(user_generator.generate_random_adult_user())
+            simulator.add_user(UserGenerator.generate_random_adult_user())
 
         for i in range(10):
             self.assertEqual(len(simulator.user_pool[i].guzi_wallet), 0)
@@ -162,10 +164,9 @@ class TestSimulator(unittest.TestCase):
         15*1 (as total_accumulated = 0) = 15
         """
         simulator = Simulator(date(2000, 1, 1))
-        user_generator = UserGenerator()
 
         for i in range(10):
-            simulator.add_user(user_generator.generate_random_adult_user())
+            simulator.add_user(UserGenerator.generate_random_adult_user())
 
         for i in range(10):
             self.assertEqual(len(simulator.user_pool[i].guzi_wallet), 0)
@@ -177,3 +178,80 @@ class TestSimulator(unittest.TestCase):
         for i in range(10):
             self.assertEqual(len(simulator.user_pool[i].guzi_wallet), 15)
             self.assertEqual(len(simulator.user_pool[i].guza_wallet), 15)
+
+
+class TestSimpleYearlyDeathGod(unittest.TestCase):
+    def test_how_much_born_should_make_a_good_prorata(self):
+        god = SimpleYearlyDeathGod()
+        population_size = 10000
+        expected_result = 113
+
+        born_number = god.how_much_born(population_size)
+
+        self.assertEqual(born_number, expected_result)
+
+    def test_how_much_die_should_make_a_good_prorata(self):
+        god = SimpleYearlyDeathGod()
+        population_size = 10000
+        expected_result = 91
+
+        born_number = god.how_much_die(population_size)
+
+        self.assertEqual(born_number, expected_result)
+
+    def test_who_is_born_should_return_correct_number_of_born(self):
+        god = SimpleYearlyDeathGod()
+        population_size = 1000
+        expected_result = 11
+
+        born_users = god.who_is_born(population_size)
+
+        self.assertEqual(len(born_users), expected_result)
+
+    def test_who_is_dead_should_return_correct_number_of_dead(self):
+        god = SimpleYearlyDeathGod()
+        population = UserGenerator.generate_users(None, 1000)
+        expected_result = 9
+
+        dead_users = god.who_is_dead(population)
+
+        self.assertEqual(len(dead_users), expected_result)
+
+
+class TestGrapheDrawer(unittest.TestCase):
+    def test_add_point_should_save_simulator_infos(self):
+        simulator = Simulator()
+        drawer = GrapheDrawer(simulator)
+
+        simulator.add_user(User(None, None))
+        drawer.add_point()
+
+        self.assertEqual(len(drawer.points), 1)
+        self.assertEqual(drawer.points[0]["date"], date.today())
+        self.assertEqual(drawer.points[0]["user_count"], 1)
+        self.assertEqual(drawer.points[0]["guzis_on_road"], 0)
+
+    def test_add_point_should_save_different_points(self):
+        simulator = Simulator(date(2000, 1, 1))
+        drawer = GrapheDrawer(simulator)
+
+        simulator.add_users(UserGenerator.generate_users(date(2000, 1, 1), 10))
+        drawer.add_point()
+        simulator.new_day()
+        drawer.add_point()
+
+        self.assertEqual(len(drawer.points), 2)
+        self.assertEqual(drawer.points[0]["date"], date(2000, 1, 1))
+        self.assertEqual(drawer.points[1]["date"], date(2000, 1, 2))
+        self.assertEqual(drawer.points[0]["user_count"], 10)
+        self.assertEqual(drawer.points[1]["user_count"], 10)
+        self.assertEqual(drawer.points[0]["guzis_on_road"], 0)
+        self.assertEqual(drawer.points[1]["guzis_on_road"], 10)
+
+        simulator.new_days(10)
+        drawer.add_point()
+
+        self.assertEqual(len(drawer.points), 3)
+        self.assertEqual(drawer.points[2]["date"], date(2000, 1, 12))
+        self.assertEqual(drawer.points[2]["user_count"], 10)
+        self.assertEqual(drawer.points[2]["guzis_on_road"], 110)

@@ -1,5 +1,9 @@
-# python-guzi
-A library to use Guzi in Python applications
+# python-guzi-simulator
+A library to use simulate Guzi interactions
+
+## Install
+1. Make a virtual environment with python >= 3.8
+2. Install requirements : ```$ pip install -r requirements.txt```
 
 ## Run tests
 
