@@ -199,23 +199,31 @@ class TestSimpleYearlyDeathGod(unittest.TestCase):
 
         self.assertEqual(born_number, expected_result)
 
-    def test_who_is_born_should_return_correct_number_of_born(self):
-        god = SimpleYearlyDeathGod()
-        population_size = 1000
-        expected_result = 11
-
-        born_users = god.who_is_born(population_size)
-
-        self.assertEqual(len(born_users), expected_result)
-
-    def test_who_is_dead_should_return_correct_number_of_dead(self):
+    def test_give_birth_should_add_correct_number_of_children(self):
         god = SimpleYearlyDeathGod()
         population = UserGenerator.generate_users(None, 1000)
-        expected_result = 9
+        expected_result = 1011
 
-        dead_users = god.who_is_dead(population)
+        god.give_birth(population)
 
-        self.assertEqual(len(dead_users), expected_result)
+        self.assertEqual(len(population), expected_result)
+
+    def test_give_death_should_remove_correct_number_of_old(self):
+        god = SimpleYearlyDeathGod()
+        population = UserGenerator.generate_users(None, 1000)
+        expected_result = 991 # 9 less
+
+        god.give_death(population)
+
+        self.assertEqual(len(population), expected_result)
+
+    def test_give_death_should_remove_none_for_small_size(self):
+        god = SimpleYearlyDeathGod()
+        population = UserGenerator.generate_users(None, 5)
+
+        god.give_death(population)
+
+        self.assertEqual(len(population), 5)
 
 
 class TestGrapheDrawer(unittest.TestCase):

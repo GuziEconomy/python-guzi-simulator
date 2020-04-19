@@ -2,6 +2,7 @@ import uuid
 from datetime import date, timedelta
 import matplotlib.pyplot as plt
 import random
+from pylab import array
 
 from guzi.models import User
 
@@ -54,18 +55,21 @@ class SimpleYearlyDeathGod:
         """
         return int(self.total_2019_death * population_size / self.total_2019_population)
 
-    def who_is_born(self, population_size, date=date.today()):
+    def give_birth(self, population, date=date.today()):
         """
-        return a list of new users prorated to given population size
+        Add to the list new users prorated to given population size
         """
-        return [UserGenerator.generate_user(date) for _ in range(self.how_much_born(population_size))]
+        for _ in range(self.how_much_born(len(population))):
+            population.append(UserGenerator.generate_user(date))
 
-    def who_is_dead(self, population):
+    def give_death(self, population):
         """
         return a list of users belonging to given population who should die
         Note : kill always the oldest, like a canicule or a coronavirus
         """
-        return population[:self.how_much_die(len(population))]
+        death_count = self.how_much_die(len(population))
+        if death_count > 0:
+            del population[-1 * death_count:]
 
 
 class GrapheDrawer:
@@ -80,7 +84,7 @@ class GrapheDrawer:
         self.points.append({
             "date": self.simulator.current_date,
             "user_count": len(self.simulator.user_pool),
-            "guzis_on_road": self.simulator.guzis_on_road,
+            "guzis_on_road": sum([len(u.guzi_wallet) for u in self.simulator.user_pool]),
         })
 
     def draw(self, x_label, y_label):
@@ -108,26 +112,20 @@ class Simulator:
         self.start_date = start_date
         self.current_date = start_date
         self.user_pool = []
-        self.user_count = 0
-        self.guzis_on_road = 0
 
     def add_user(self, user):
         self.user_pool.append(user)
-        self.user_count += 1
-        self.guzis_on_road += len(user.guzi_wallet)
 
     def add_users(self, users):
         for user in users:
             self.add_user(user)
 
     def new_day(self):
-        self.guzis_on_road = 0
         self.current_date += timedelta(days=1)
         for user in self.user_pool:
             user.check_balance()
             user.check_outdated_guzis(self.current_date)
             user.create_daily_guzis(self.current_date)
-            self.guzis_on_road += len(user.guzi_wallet)
 
     def new_days(self, days):
         for i in range(days):
