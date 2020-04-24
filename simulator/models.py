@@ -15,11 +15,70 @@ def random_date(start, end):
     random_second = random.randrange(int_delta)
     return start + timedelta(seconds=random_second)
 
+
+class SimpleUser(User):
+    """A User but light in memory usage"""
+    def __init__(self, id, birthdate):
+        self.id = id
+        self.birthdate = birthdate
+        self.guzi_wallet = 0
+        self.guza_wallet = 0
+        self.total_accumulated = 0
+        self.balance = {"income": 0, "outcome": 0}
+
+    def daily_guzis(self):
+        return int(self.total_accumulated ** (1/3) + 1)
+
+    def outdate(self, guzis):
+        if self._is_guzi(guzi):
+            self.guzi_wallet -= 1
+            self.total_accumulated += 1
+        if self._is_guza(guzi):
+            self.guza_wallet -= 1
+
+    def pay(self, guzis):
+        for guzi in guzis:
+            self.balance["income"] += len(guzis)
+
+    def spend_to(self, target, amount):
+        if amount < 0:
+            raise ValueError("Cannot spend negative amount")
+        if amount > self.guzi_wallet:
+            raise ValueError("User cannot pay this amount")
+        if target is self:
+            self.total_accumulated += amount
+        else:
+            target.pay([date.isoformat() + "-" + self.id + "-guzi{:04d}".format(i) for i in range(amount)])
+        self.guzi_wallet -= amount
+
+    def check_balance(self):
+        difference = self.balance["income"] - self.balance["outcome"]
+        if difference > 0:
+            self.balance["income"] -= difference
+            self.total_accumulated += difference
+
+    def check_outdated_guzis(self, date):
+        number_of_guzis_to_add = self.daily_guzis()
+        difference_guzi = self.guzi_wallet - number_of_guzis_to_add*30
+        difference_guza = self.guza_wallet - number_of_guzis_to_add*30
+
+        if difference_guzi > 0:
+            self.guzi_wallet -= difference_guzi
+            self.total_accumulated += difference_guzi
+        if difference_guza > 0:
+            self.guza_wallet -= difference_guza
+
+    def create_daily_guzis(self, date):
+        number_of_guzis_to_add = self.daily_guzis()
+        self.guzi_wallet += number_of_guzis_to_add
+        self.guza_wallet += number_of_guzis_to_add
+
+
 class UserGenerator:
     def generate_user(birthdate):
         randId = str(uuid.uuid4())
 
-        return User(randId, birthdate)
+        return SimpleUser(randId, birthdate)
 
     def generate_users(birthdate, count):
         return [UserGenerator.generate_user(birthdate) for _ in range(count)]
@@ -61,6 +120,7 @@ class SimpleYearlyDeathGod:
         """
         for _ in range(self.how_much_born(len(population))):
             population.append(UserGenerator.generate_user(date))
+        return population
 
     def give_death(self, population):
         """
@@ -68,8 +128,7 @@ class SimpleYearlyDeathGod:
         Note : kill always the oldest, like a canicule or a coronavirus
         """
         death_count = self.how_much_die(len(population))
-        if death_count > 0:
-            del population[-1 * death_count:]
+        return population[death_count:]
 
 
 class GrapheDrawer:
@@ -78,29 +137,60 @@ class GrapheDrawer:
     """
     def __init__(self, simulator):
         self.simulator = simulator
-        self.points = []
+        self.points = {
+            "date": [],
+            "user_count": [],
+            "average_daily_guzi": [],
+            "guzis_on_road": [],
+        }
+        self.to_draw = {"x": None, "y": []}
+        self.colors = ["b-", "r-", "g-", "y-", "o-"]
+
 
     def add_point(self):
-        self.points.append({
-            "date": self.simulator.current_date,
-            "user_count": len(self.simulator.user_pool),
-            "guzis_on_road": sum([len(u.guzi_wallet) for u in self.simulator.user_pool]),
-        })
+        self.points["date"].append(self.simulator.current_date)
+        self.points["user_count"].append(len(self.simulator.user_pool))
+        self.points["average_daily_guzi"].append(sum([u.daily_guzis() for u in self.simulator.user_pool])/len(self.simulator.user_pool))
+        self.points["guzis_on_road"].append(sum([u.guzi_wallet for u in self.simulator.user_pool]))
 
-    def draw(self, x_label, y_label):
-        x_points = []
-        y_points = []
-        for p in self.points:
-            x_points.append(p[x_label])
-            y_points.append(p[y_label])
+    def add_graph(self, x, y):
+        if self.to_draw["x"] is not None and x != self.to_draw["x"]:
+            raise ValueError("Cannot add different x ({} != {})".format(self.to_draw["x"], x))
+        self.to_draw["x"] = x
+        if y not in self.to_draw["y"]:
+            self.to_draw["y"].append(y)
 
-        x = array(x_points)
-        y = array(y_points)
+    def draw(self):
+        graph_count = len(self.to_draw["y"])
+        if self.to_draw["x"] is None:
+            raise ValueError("You need to set an 'x' using add_graph(x,y) before calling draw()")
+        if graph_count == 0:
+            raise ValueError("You need to set an 'y' using add_graph(x,y) before calling draw()")
 
-        plt.xlabel(x_label)
-        plt.ylabel(y_label)
+        fig, host = plt.subplots()
+        if graph_count > 2:
+            fig.subplots_adjust(right=0.75*(graph_count-2))
 
-        plt.plot(x, y)
+        p, = host.plot(
+            self.points[self.to_draw["x"]],
+            self.points[self.to_draw["y"][0]],
+        self.colors[0], label=self.to_draw["y"][0])
+
+        host.set_xlabel(self.to_draw["x"])
+        host.set_ylabel(self.to_draw["y"][0])
+        host.yaxis.label.set_color(p.get_color())
+
+        for i in range(1, len(self.to_draw["y"])):
+            par = host.twinx()
+            par.spines["right"].set_position(("axes", 1 + 0.2*(i-1)))
+            p, = par.plot(
+                self.points[self.to_draw["x"]],
+                self.points[self.to_draw["y"][i]],
+                self.colors[i%len(self.colors)], label=self.to_draw["y"][i])
+            par.set_ylabel(self.to_draw["y"][i])
+            par.yaxis.label.set_color(p.get_color())
+
+
         return plt
 
 

@@ -1,8 +1,7 @@
 import unittest
 from datetime import date
-from guzi.models import User
 
-from simulator.models import Simulator, UserGenerator, SimpleYearlyDeathGod, GrapheDrawer
+from simulator.models import Simulator, UserGenerator, SimpleYearlyDeathGod, GrapheDrawer, SimpleUser
 
 
 class TestUserGenerator(unittest.TestCase):
@@ -11,7 +10,7 @@ class TestUserGenerator(unittest.TestCase):
     def test_generate_user(self):
         user = UserGenerator.generate_user(date(2000, 1, 1))
 
-        self.assertIsInstance(user, User)
+        self.assertIsInstance(user, SimpleUser)
         self.assertEqual(user.birthdate, date(2000, 1, 1))
 
     def test_generate_users(self):
@@ -22,7 +21,7 @@ class TestUserGenerator(unittest.TestCase):
     def test_generate_random_user(self):
         user = UserGenerator.generate_random_user()
 
-        self.assertIsInstance(user, User)
+        self.assertIsInstance(user, SimpleUser)
 
     def test_generate_random_adult_user(self):
         users = []
@@ -48,14 +47,14 @@ class TestSimulator(unittest.TestCase):
             simulator.add_user(UserGenerator.generate_random_adult_user())
 
         for i in range(10):
-            self.assertEqual(len(simulator.user_pool[i].guzi_wallet), 0)
-            self.assertEqual(len(simulator.user_pool[i].guza_wallet), 0)
+            self.assertEqual(simulator.user_pool[i].guzi_wallet, 0)
+            self.assertEqual(simulator.user_pool[i].guza_wallet, 0)
 
         simulator.new_day()
 
         for i in range(10):
-            self.assertEqual(len(simulator.user_pool[i].guzi_wallet), 1)
-            self.assertEqual(len(simulator.user_pool[i].guza_wallet), 1)
+            self.assertEqual(simulator.user_pool[i].guzi_wallet, 1)
+            self.assertEqual(simulator.user_pool[i].guza_wallet, 1)
 
     def test_new_day_must_check_balance_of_all_users(self):
         """
@@ -66,16 +65,16 @@ class TestSimulator(unittest.TestCase):
 
         for i in range(10):
             user = UserGenerator.generate_random_adult_user()
-            user.balance.income.append("1234")
+            user.balance["income"] += 1
             simulator.add_user(user)
 
         for i in range(10):
-            self.assertEqual(len(simulator.user_pool[i].total_accumulated), 0)
+            self.assertEqual(simulator.user_pool[i].total_accumulated, 0)
 
         simulator.new_day()
 
         for i in range(10):
-            self.assertEqual(len(simulator.user_pool[i].total_accumulated), 1)
+            self.assertEqual(simulator.user_pool[i].total_accumulated, 1)
 
     def test_new_day_must_check_outdated_guzis_of_all_users(self):
         """
@@ -90,12 +89,12 @@ class TestSimulator(unittest.TestCase):
             simulator.add_user(user)
 
         for i in range(10):
-            self.assertEqual(len(simulator.user_pool[i].total_accumulated), 0)
+            self.assertEqual(simulator.user_pool[i].total_accumulated, 0)
 
-        simulator.new_days(30)
+        simulator.new_days(31)
 
         for i in range(10):
-            self.assertEqual(len(simulator.user_pool[i].total_accumulated), 1)
+            self.assertEqual(simulator.user_pool[i].total_accumulated, 1)
 
     def test_new_day_must_create_daily_guzas_in_users_wallets(self):
         """
@@ -108,14 +107,14 @@ class TestSimulator(unittest.TestCase):
             simulator.add_user(UserGenerator.generate_random_adult_user())
 
         for i in range(10):
-            self.assertEqual(len(simulator.user_pool[i].guza_wallet), 0)
-            self.assertEqual(len(simulator.user_pool[i].guza_wallet), 0)
+            self.assertEqual(simulator.user_pool[i].guza_wallet, 0)
+            self.assertEqual(simulator.user_pool[i].guza_wallet, 0)
 
         simulator.new_day()
 
         for i in range(10):
-            self.assertEqual(len(simulator.user_pool[i].guza_wallet), 1)
-            self.assertEqual(len(simulator.user_pool[i].guza_wallet), 1)
+            self.assertEqual(simulator.user_pool[i].guza_wallet, 1)
+            self.assertEqual(simulator.user_pool[i].guza_wallet, 1)
 
     def test_new_day_must_check_outdated_guzas_of_all_users(self):
         """
@@ -128,16 +127,14 @@ class TestSimulator(unittest.TestCase):
             simulator.add_user(UserGenerator.generate_random_adult_user())
 
         for i in range(1):
-            self.assertEqual(len(simulator.user_pool[i].guza_wallet), 0)
-            self.assertEqual(len(simulator.user_pool[i].guza_trashbin), 0)
+            self.assertEqual(simulator.user_pool[i].guza_wallet, 0)
 
         simulator.new_days(31)
 
         for i in range(1):
             # 31 because at 30, a Guzi was outdated and increased the daily earn
             # to 2/day
-            self.assertEqual(len(simulator.user_pool[i].guza_wallet), 31)
-            self.assertEqual(len(simulator.user_pool[i].guza_trashbin), 1)
+            self.assertEqual(simulator.user_pool[i].guza_wallet, 31)
 
     def test_new_day_multiple_times(self):
         simulator = Simulator(date(2000, 1, 1))
@@ -146,8 +143,8 @@ class TestSimulator(unittest.TestCase):
             simulator.add_user(UserGenerator.generate_random_adult_user())
 
         for i in range(10):
-            self.assertEqual(len(simulator.user_pool[i].guzi_wallet), 0)
-            self.assertEqual(len(simulator.user_pool[i].guza_wallet), 0)
+            self.assertEqual(simulator.user_pool[i].guzi_wallet, 0)
+            self.assertEqual(simulator.user_pool[i].guza_wallet, 0)
 
         simulator.new_day()
         simulator.new_day()
@@ -155,8 +152,8 @@ class TestSimulator(unittest.TestCase):
 
         self.assertEqual(simulator.current_date, date(2000, 1, 4))
         for i in range(10):
-            self.assertEqual(len(simulator.user_pool[i].guzi_wallet), 3)
-            self.assertEqual(len(simulator.user_pool[i].guza_wallet), 3)
+            self.assertEqual(simulator.user_pool[i].guzi_wallet, 3)
+            self.assertEqual(simulator.user_pool[i].guza_wallet, 3)
 
     def test_new_days(self):
         """
@@ -169,15 +166,15 @@ class TestSimulator(unittest.TestCase):
             simulator.add_user(UserGenerator.generate_random_adult_user())
 
         for i in range(10):
-            self.assertEqual(len(simulator.user_pool[i].guzi_wallet), 0)
-            self.assertEqual(len(simulator.user_pool[i].guza_wallet), 0)
+            self.assertEqual(simulator.user_pool[i].guzi_wallet, 0)
+            self.assertEqual(simulator.user_pool[i].guza_wallet, 0)
 
         simulator.new_days(15)
 
         self.assertEqual(simulator.current_date, date(2000, 1, 16))
         for i in range(10):
-            self.assertEqual(len(simulator.user_pool[i].guzi_wallet), 15)
-            self.assertEqual(len(simulator.user_pool[i].guza_wallet), 15)
+            self.assertEqual(simulator.user_pool[i].guzi_wallet, 15)
+            self.assertEqual(simulator.user_pool[i].guza_wallet, 15)
 
 
 class TestSimpleYearlyDeathGod(unittest.TestCase):
@@ -204,7 +201,7 @@ class TestSimpleYearlyDeathGod(unittest.TestCase):
         population = UserGenerator.generate_users(None, 1000)
         expected_result = 1011
 
-        god.give_birth(population)
+        population = god.give_birth(population)
 
         self.assertEqual(len(population), expected_result)
 
@@ -213,7 +210,7 @@ class TestSimpleYearlyDeathGod(unittest.TestCase):
         population = UserGenerator.generate_users(None, 1000)
         expected_result = 991 # 9 less
 
-        god.give_death(population)
+        population = god.give_death(population)
 
         self.assertEqual(len(population), expected_result)
 
@@ -231,13 +228,13 @@ class TestGrapheDrawer(unittest.TestCase):
         simulator = Simulator()
         drawer = GrapheDrawer(simulator)
 
-        simulator.add_user(User(None, None))
+        simulator.add_user(SimpleUser(None, None))
         drawer.add_point()
 
-        self.assertEqual(len(drawer.points), 1)
-        self.assertEqual(drawer.points[0]["date"], date.today())
-        self.assertEqual(drawer.points[0]["user_count"], 1)
-        self.assertEqual(drawer.points[0]["guzis_on_road"], 0)
+        self.assertEqual(len(drawer.points["date"]), 1)
+        self.assertEqual(drawer.points["date"][0], date.today())
+        self.assertEqual(drawer.points["user_count"][0], 1)
+        self.assertEqual(drawer.points["guzis_on_road"][0], 0)
 
     def test_add_point_should_save_different_points(self):
         simulator = Simulator(date(2000, 1, 1))
@@ -248,18 +245,47 @@ class TestGrapheDrawer(unittest.TestCase):
         simulator.new_day()
         drawer.add_point()
 
-        self.assertEqual(len(drawer.points), 2)
-        self.assertEqual(drawer.points[0]["date"], date(2000, 1, 1))
-        self.assertEqual(drawer.points[1]["date"], date(2000, 1, 2))
-        self.assertEqual(drawer.points[0]["user_count"], 10)
-        self.assertEqual(drawer.points[1]["user_count"], 10)
-        self.assertEqual(drawer.points[0]["guzis_on_road"], 0)
-        self.assertEqual(drawer.points[1]["guzis_on_road"], 10)
+        self.assertEqual(len(drawer.points["date"]), 2)
+        self.assertEqual(drawer.points["date"][0], date(2000, 1, 1))
+        self.assertEqual(drawer.points["date"][1], date(2000, 1, 2))
+        self.assertEqual(drawer.points["user_count"][0], 10)
+        self.assertEqual(drawer.points["user_count"][1], 10)
+        self.assertEqual(drawer.points["guzis_on_road"][0], 0)
+        self.assertEqual(drawer.points["guzis_on_road"][1], 10)
 
         simulator.new_days(10)
         drawer.add_point()
 
-        self.assertEqual(len(drawer.points), 3)
-        self.assertEqual(drawer.points[2]["date"], date(2000, 1, 12))
-        self.assertEqual(drawer.points[2]["user_count"], 10)
-        self.assertEqual(drawer.points[2]["guzis_on_road"], 110)
+        self.assertEqual(len(drawer.points["date"]), 3)
+        self.assertEqual(drawer.points["date"][2], date(2000, 1, 12))
+        self.assertEqual(drawer.points["user_count"][2], 10)
+        self.assertEqual(drawer.points["guzis_on_road"][2], 110)
+
+    def test_add_graph_should_raise_error_on_different_x(self):
+        drawer = GrapheDrawer(None)
+
+        drawer.add_graph("date", "average_daily_guzi")
+        with self.assertRaises(ValueError):
+            drawer.add_graph("user_count", "guzis_on_road")
+
+    def test_add_graph_shouldnd_duplicate_if_same_y_added_twice(self):
+        drawer = GrapheDrawer(None)
+
+        drawer.add_graph("date", "average_daily_guzi")
+        drawer.add_graph("date", "average_daily_guzi")
+        
+        self.assertEqual(len(drawer.to_draw["y"]), 1)
+
+    def test_draw_should_raise_error_if_no_x_set(self):
+        drawer = GrapheDrawer(None)
+
+        with self.assertRaises(ValueError):
+            drawer.draw()
+
+    def test_draw_should_raise_error_if_no_y_set(self):
+        drawer = GrapheDrawer(None)
+
+        drawer.to_draw = {"x": "ok", "y": []}
+
+        with self.assertRaises(ValueError):
+            drawer.draw()
