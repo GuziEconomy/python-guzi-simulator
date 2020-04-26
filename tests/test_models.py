@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
 from datetime import date
-from guzi.models import GuziCreator
+from guzi.models import GuziCreator, Company
 
 from simulator.models import Simulator, UserGenerator, SimpleYearlyDeathGod, GrapheDrawer, SimpleUser, RandomTrader
 
@@ -62,6 +62,33 @@ class TestSimpkeUser(unittest.TestCase):
 
         target.pay.assert_called_with([GuziCreator.create_guzi(source, date(2000, 1, 1), i) for i in range(10)])
         self.assertEqual(source.guzi_wallet, 0)
+
+    def test_give_guzas_to_should_raise_error_if_amount_is_negative(self):
+        user = SimpleUser("", None)
+
+        with self.assertRaises(ValueError):
+            user.give_guzas_to(None, -10)
+
+    def test_give_guzas_to_should_raise_error_if_user_cant_afford_it(self):
+        user = SimpleUser("", None)
+
+        with self.assertRaises(ValueError):
+            user.give_guzas_to(None, 1)
+
+    def test_give_guzas_to_should_raise_error_if_target_is_no_company(self):
+        user = SimpleUser("", None)
+
+        with self.assertRaises(ValueError):
+            user.give_guzas_to(user, 0)
+
+    def test_give_guzas_to_should_increase_outcome_and_decrease_guza_wallet(self):
+        user = SimpleUser("", None)
+        user.guza_wallet = 10
+
+        user.give_guzas_to(Company("", [user]), 10)
+
+        self.assertEqual(user.guza_wallet, 0)
+        self.assertEqual(user.balance["outcome"], 10)
 
     def test_check_balance(self):
         user = SimpleUser("", None)
@@ -385,24 +412,65 @@ class TestGrapheDrawer(unittest.TestCase):
 
 
 class TestRandomTrader(unittest.TestCase):
-    def test_init_should_set_the_user_pool(self):
+    def test_init_should_set_user_pool(self):
         user_pool = ["a", "b"]
         trader = RandomTrader(user_pool)
 
         self.assertEqual(trader.user_pool, user_pool)
+        self.assertEqual(trader.company_pool, [])
 
-    def test_trade_guzis_with_count_should_reduce_N_guzi_wallet(self):
+    def test_init_should_optionaly_set_company_pool(self):
+        company_pool = ["c", "d"]
+        trader = RandomTrader(None, company_pool)
+
+        self.assertEqual(trader.company_pool, company_pool)
+
+    def test_trade_guzis_with_count_should_reduce_N_guzi_wallets(self):
         user_pool = UserGenerator.generate_users(date(2000, 1, 1), 10)
         trader = RandomTrader(user_pool)
         for u in user_pool:
-            for i in range(1, 10):
-                u.create_daily_guzis(date(2000, 1, i))
+            u.guzi_wallet = 12
 
         trader.trade_guzis(5)
 
-        user_who_spended = 0
-        for u in user_pool:
-            if u.guzi_wallet < 10:
-                user_who_spended += 1
+        # Check all users who spended at list 1 Guzi (should be 5)
+        users_who_spended = [u for u in user_pool if u.guzi_wallet < 12]
 
-        self.assertEqual(user_who_spended, 5)
+        self.assertEqual(len(users_who_spended), 5)
+
+    def test_trade_guzis_without_count_should_reduce_all_guzi_wallets(self):
+        user_pool = UserGenerator.generate_users(date(2000, 1, 1), 15)
+        trader = RandomTrader(user_pool)
+        for u in user_pool:
+            u.guzi_wallet = 11
+            
+        trader.trade_guzis()
+        # Check all users who spended at list 1 Guzi (should be 5)
+        users_who_spended = [u for u in user_pool if u.guzi_wallet < 11]
+
+        self.assertEqual(len(users_who_spended), 15)
+
+    #def test_trade_guzas_without_count_should_reduce_N_guza_wallets(self):
+    #    user_pool = UserGenerator.generate_users(date(2000, 1, 1), 10)
+    #    trader = RandomTrader(user_pool)
+    #    for u in user_pool:
+    #        u.guza_wallet = 12
+
+    #    trader.trade_guzas(5)
+
+    #    # Check all users who gave at list 1 Guza (should be 5)
+    #    users_who_gave = [u for u in user_pool if u.guza_wallet < 12]
+
+    #    self.assertEqual(len(users_who_gave), 5)
+
+    #def test_trade_guzas_without_count_should_reduce_all_guza_wallets(self):
+    #    user_pool = UserGenerator.generate_users(date(2000, 1, 1), 15)
+    #    trader = RandomTrader(user_pool)
+    #    for u in user_pool:
+    #        u.guza_wallet = 11
+    #        
+    #    trader.trade_guzas()
+    #    # Check all users who gave at list 1 Guza (should be 15)
+    #    users_who_gave = [u for u in user_pool if u.guza_wallet < 11]
+
+    #    self.assertEqual(len(users_who_gave), 15)

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import random
 from pylab import array
 
-from guzi.models import User
+from guzi.models import User, GuziCreator, Company
 
 def random_date(start, end):
     """
@@ -24,21 +24,22 @@ class SimpleUser(User):
         self.guzi_wallet = 0
         self.guza_wallet = 0
         self.total_accumulated = 0
+        self.guza_trashbin = 0
         self.balance = {"income": 0, "outcome": 0}
 
     def daily_guzis(self):
         return int(self.total_accumulated ** (1/3) + 1)
 
     def outdate(self, guzis):
-        if self._is_guzi(guzi):
-            self.guzi_wallet -= 1
-            self.total_accumulated += 1
-        if self._is_guza(guzi):
-            self.guza_wallet -= 1
+        for guzi in guzis:
+            if self._is_guzi(guzi):
+                self.guzi_wallet -= 1
+                self.total_accumulated += 1
+            if self._is_guza(guzi):
+                self.guza_wallet -= 1
 
     def pay(self, guzis):
-        for guzi in guzis:
-            self.balance["income"] += len(guzis)
+        self.balance["income"] += len(guzis)
 
     def spend_to(self, target, amount):
         if amount < 0:
@@ -48,8 +49,19 @@ class SimpleUser(User):
         if target is self:
             self.total_accumulated += amount
         else:
-            target.pay([date.isoformat() + "-" + self.id + "-guzi{:04d}".format(i) for i in range(amount)])
+            target.pay([GuziCreator.create_guzi(self, date(2000, 1, 1), i) for i in range(amount)])
         self.guzi_wallet -= amount
+
+    def give_guzas_to(self, target, amount):
+        if amount < 0:
+            raise ValueError("Cannot give negative amount")
+        if amount > self.guza_wallet:
+            raise ValueError("User cannot give this amount")
+        if not isinstance(target, Company):
+            raise ValueError("Can only give Guzas to Company, not {}".format(type(target)))
+        target.add_guzas([GuziCreator.create_guza(self, date(2000, 1, 1), i) for i in range(amount)])
+        self.guza_wallet -= amount
+        self.balance["outcome"] += amount
 
     def check_balance(self):
         difference = self.balance["income"] - self.balance["outcome"]
@@ -67,6 +79,7 @@ class SimpleUser(User):
             self.total_accumulated += difference_guzi
         if difference_guza > 0:
             self.guza_wallet -= difference_guza
+            self.guza_trashbin += difference_guza
 
     def create_daily_guzis(self, date):
         number_of_guzis_to_add = self.daily_guzis()
@@ -193,6 +206,34 @@ class GrapheDrawer:
 
         return plt
 
+
+class RandomTrader:
+    """
+    Handle paiements between users randomly
+    """
+    def __init__(self, user_pool, company_pool=[]):
+        self.user_pool = user_pool
+        self.company_pool = company_pool
+
+    def trade_guzis(self, k=0):
+        """
+        make paiements from k users, default 0
+        If k=0, each user makes a paiement <= it's wallet size
+        """
+        if k == 0:
+            k = len(self.user_pool)
+        users = random.sample(self.user_pool, k=k)
+        for u in users:
+            u.spend_to(random.choice(self.user_pool), random.randrange(1, u.guzi_wallet))
+
+    def trade_guzas(self, k=0):
+        """
+        Give guzas from k users to companies in company_pool
+        If k=0, each user makes a give <= it's wallet size
+        """
+        users = random.sample(self.user_pool, k=k)
+        for u in users:
+            u.give_guzas_to()
 
 class Simulator:
     """
