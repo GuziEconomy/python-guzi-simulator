@@ -3,10 +3,10 @@ from unittest.mock import MagicMock
 from datetime import date
 from guzi.models import GuziCreator, Company
 
-from simulator.models import Simulator, UserGenerator, SimpleYearlyDeathGod, GrapheDrawer, SimpleUser, RandomTrader
+from simulator.models import Simulator, UserGenerator, SimpleYearlyDeathGod, GrapheDrawer, SimpleUser, SimpleCompany, RandomTrader, CompanyGenerator
 
 
-class TestSimpkeUser(unittest.TestCase):
+class TestSimpleUser(unittest.TestCase):
     def test_daily_guzis(self):
         user = SimpleUser("", None)
         user.total_accumulated = 27
@@ -122,6 +122,42 @@ class TestSimpkeUser(unittest.TestCase):
 
         self.assertEqual(user.guzi_wallet, expected)
         self.assertEqual(user.guza_wallet, expected)
+
+
+class TestSimpleCompany(unittest.TestCase):
+    def test_add_guzas(self):
+        founders = [UserGenerator.generate_user(date(2000, 1, 1))]
+        company = SimpleCompany("", founders)
+
+        company.add_guzas(["1", "2"])
+
+        self.assertEqual(company.guzi_wallet, 2)
+
+    def test_spend_to_should_raise_error_if_amount_is_negative(self):
+        founders = [UserGenerator.generate_user(date(2000, 1, 1))]
+        company = SimpleCompany("", founders)
+
+        with self.assertRaises(ValueError):
+            company.spend_to(None, -10)
+
+    def test_spend_to_should_raise_error_if_user_cant_afford_it(self):
+        founders = [UserGenerator.generate_user(date(2000, 1, 1))]
+        company = SimpleCompany("", founders)
+
+        with self.assertRaises(ValueError):
+            company.spend_to(None, 1)
+
+    def test_spend_to_should_pay_target(self):
+        founders = [UserGenerator.generate_user(date(2000, 1, 1))]
+        company = SimpleCompany("", founders)
+        company.guzi_wallet = 10
+        target = SimpleUser("", None)
+        target.pay = MagicMock()
+
+        company.spend_to(target, 10)
+
+        target.pay.assert_called_with([GuziCreator.create_guza(founders[0], date(2000, 1, 1), i) for i in range(10)])
+        self.assertEqual(company.guzi_wallet, 0)
 
 
 class TestUserGenerator(unittest.TestCase):
@@ -425,6 +461,23 @@ class TestRandomTrader(unittest.TestCase):
 
         self.assertEqual(trader.company_pool, company_pool)
 
+    def test_trade_guzis_should_raise_error_if_user_pool_is_empty(self):
+        trader = RandomTrader([])
+
+        with self.assertRaises(ValueError):
+            trader.trade_guzis()
+
+    def test_trade_guzis_should_make_no_trade_for_users_who_are_broke(self):
+        user_pool = UserGenerator.generate_users(date(2000, 1, 1), 5)
+        user_pool[0].guzi_wallet = 5 # Others are broke
+        trader = RandomTrader(user_pool)
+
+        trader.trade_guzis(5)
+
+        self.assertTrue(user_pool[0].guzi_wallet < 5)
+        for u in user_pool[1:]:
+            self.assertEqual(u.guzi_wallet, 0)
+
     def test_trade_guzis_with_count_should_reduce_N_guzi_wallets(self):
         user_pool = UserGenerator.generate_users(date(2000, 1, 1), 10)
         trader = RandomTrader(user_pool)
@@ -450,27 +503,66 @@ class TestRandomTrader(unittest.TestCase):
 
         self.assertEqual(len(users_who_spended), 15)
 
-    #def test_trade_guzas_without_count_should_reduce_N_guza_wallets(self):
-    #    user_pool = UserGenerator.generate_users(date(2000, 1, 1), 10)
-    #    trader = RandomTrader(user_pool)
-    #    for u in user_pool:
-    #        u.guza_wallet = 12
+    def test_trade_guzis_should_trade_companies_if_company_pool_not_empty(self):
+        user_pool = UserGenerator.generate_users(date(2000, 1, 1), 10)
+        company_pool = CompanyGenerator.create_company_pool(4, user_pool)
+        trader = RandomTrader(user_pool, company_pool)
+        for c in company_pool:
+            # Add 10 Guzas to each company
+            c.guzi_wallet = 10
 
-    #    trader.trade_guzas(5)
+        trader.trade_guzis()
+        companies_who_spended = [c for c in company_pool if c.guzi_wallet < 10]
 
-    #    # Check all users who gave at list 1 Guza (should be 5)
-    #    users_who_gave = [u for u in user_pool if u.guza_wallet < 12]
+        self.assertEqual(len(companies_who_spended), 4)
 
-    #    self.assertEqual(len(users_who_gave), 5)
+    def test_trade_guzas_should_raise_error_if_user_pool_is_empty(self):
+        trader = RandomTrader([])
 
-    #def test_trade_guzas_without_count_should_reduce_all_guza_wallets(self):
-    #    user_pool = UserGenerator.generate_users(date(2000, 1, 1), 15)
-    #    trader = RandomTrader(user_pool)
-    #    for u in user_pool:
-    #        u.guza_wallet = 11
-    #        
-    #    trader.trade_guzas()
-    #    # Check all users who gave at list 1 Guza (should be 15)
-    #    users_who_gave = [u for u in user_pool if u.guza_wallet < 11]
+        with self.assertRaises(ValueError):
+            trader.trade_guzas()
 
-    #    self.assertEqual(len(users_who_gave), 15)
+    def test_trade_guzas_should_raise_error_if_company_pool_is_empty(self):
+        trader = RandomTrader([SimpleUser(None, None)])
+
+        with self.assertRaises(ValueError):
+            trader.trade_guzas()
+
+    def test_trade_guzas_should_make_no_trade_for_users_who_are_broke(self):
+        user_pool = UserGenerator.generate_users(date(2000, 1, 1), 5)
+        user_pool[0].guza_wallet = 5 # Others are broke
+        company_pool = CompanyGenerator.create_company_pool(4, user_pool)
+        trader = RandomTrader(user_pool, company_pool)
+
+        trader.trade_guzas(5)
+
+        self.assertTrue(user_pool[0].guza_wallet < 5)
+        for u in user_pool[1:]:
+            self.assertEqual(u.guza_wallet, 0)
+
+    def test_trade_guzas_without_count_should_reduce_N_guza_wallets(self):
+        user_pool = UserGenerator.generate_users(date(2000, 1, 1), 10)
+        company_pool = CompanyGenerator.create_company_pool(4, user_pool)
+        trader = RandomTrader(user_pool, company_pool)
+        for u in user_pool:
+            u.guza_wallet = 12
+
+        trader.trade_guzas(5)
+
+        # Check all users who gave at list 1 Guza (should be 5)
+        users_who_gave = [u for u in user_pool if u.guza_wallet < 12]
+
+        self.assertEqual(len(users_who_gave), 5)
+
+    def test_trade_guzas_without_count_should_reduce_all_guza_wallets(self):
+        user_pool = UserGenerator.generate_users(date(2000, 1, 1), 15)
+        company_pool = CompanyGenerator.create_company_pool(4, user_pool)
+        trader = RandomTrader(user_pool, company_pool)
+        for u in user_pool:
+            u.guza_wallet = 11
+            
+        trader.trade_guzas()
+        # Check all users who gave at list 1 Guza (should be 15)
+        users_who_gave = [u for u in user_pool if u.guza_wallet < 11]
+
+        self.assertEqual(len(users_who_gave), 15)

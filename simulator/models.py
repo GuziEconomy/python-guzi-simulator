@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import random
 from pylab import array
 
-from guzi.models import User, GuziCreator, Company
+from guzi.models import User, GuziCreator, Company, DefaultEngagedStrategy
 
 def random_date(start, end):
     """
@@ -87,6 +87,27 @@ class SimpleUser(User):
         self.guza_wallet += number_of_guzis_to_add
 
 
+class SimpleCompany(Company):
+    def __init__(self, id, founders):
+        self.id = id
+        self.guzi_wallet = 0
+        self.engaged_strategy = DefaultEngagedStrategy(founders)
+        # sample_user is only used to generate guzas in spend_to
+        self.sample_user = founders[0]
+
+    def add_guzas(self, guzas):
+        self.guzi_wallet += len(guzas)
+
+    def spend_to(self, target, amount):
+        if amount < 0:
+            raise ValueError("Cannot spend negative amount")
+        if amount > self.guzi_wallet:
+            raise ValueError("User cannot pay this amount")
+        guzis = [GuziCreator.create_guza(self.sample_user, date(2000, 1, 1), i) for i in range(amount)]
+        target.pay(guzis)
+        self.guzi_wallet -= amount
+
+
 class UserGenerator:
     def generate_user(birthdate):
         randId = str(uuid.uuid4())
@@ -106,6 +127,16 @@ class UserGenerator:
 
     def generate_random_adult_user():
         return UserGenerator.generate_random_user(date(1940, 1, 1), date.today()-18*timedelta(days=365, hours=6))
+
+
+class CompanyGenerator:
+    def create_company_pool(size, user_pool):
+        return [
+            SimpleCompany("i",
+                [random.choice(user_pool) for _ in range(random.randrange(1, min(len(user_pool), 5)))]
+            )
+            for i in range(size)
+        ]
 
 
 class SimpleYearlyDeathGod:
@@ -217,23 +248,34 @@ class RandomTrader:
 
     def trade_guzis(self, k=0):
         """
-        make paiements from k users, default 0
-        If k=0, each user makes a paiement <= it's wallet size
+        make paiements from k entities (user or company), default 0
+        If k=0, each entity makes a paiement <= it's wallet size
         """
+        if len(self.user_pool) == 0:
+            raise ValueError("Cannot trade guzis with empty user_pool")
+        all_entities = self.user_pool + self.company_pool
         if k == 0:
-            k = len(self.user_pool)
-        users = random.sample(self.user_pool, k=k)
-        for u in users:
-            u.spend_to(random.choice(self.user_pool), random.randrange(1, u.guzi_wallet))
+            k = len(all_entities)
+        entities = random.sample(all_entities, k=k)
+        for e in entities:
+            if e.guzi_wallet > 0:
+                e.spend_to(random.choice(all_entities), random.randrange(1, e.guzi_wallet))
 
     def trade_guzas(self, k=0):
         """
         Give guzas from k users to companies in company_pool
         If k=0, each user makes a give <= it's wallet size
         """
+        if len(self.user_pool) == 0:
+            raise ValueError("Cannot trade guzas with empty user_pool")
+        if len(self.company_pool) == 0:
+            raise ValueError("Cannot trade guzas with empty company_pool")
+        if k == 0:
+            k = len(self.user_pool)
         users = random.sample(self.user_pool, k=k)
         for u in users:
-            u.give_guzas_to()
+            if u.guza_wallet > 0:
+                u.give_guzas_to(random.choice(self.company_pool), random.randrange(1, u.guza_wallet))
 
 class Simulator:
     """

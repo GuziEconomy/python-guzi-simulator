@@ -34,6 +34,5 @@ optional arguments:
 For example :
 
 ```bash
-# 
 python simulator/simulator.py -u 100 -d 100 -f 10 -x date -y user_count
 ```
