@@ -1,7 +1,100 @@
 import unittest
+from unittest.mock import MagicMock
 from datetime import date
+from guzi.models import GuziCreator
 
-from simulator.models import Simulator, UserGenerator, SimpleYearlyDeathGod, GrapheDrawer, SimpleUser
+from simulator.models import Simulator, UserGenerator, SimpleYearlyDeathGod, GrapheDrawer, SimpleUser, RandomTrader
+
+
+class TestSimpkeUser(unittest.TestCase):
+    def test_daily_guzis(self):
+        user = SimpleUser("", None)
+        user.total_accumulated = 27
+
+        expected = 4
+        result = user.daily_guzis()
+
+        self.assertEqual(result, expected)
+
+    def test_outdate(self):
+        user = SimpleUser("", None)
+        user.guzi_wallet = 1
+
+        user.outdate([GuziCreator.create_guzi(user, date(2000, 1, 1), 1)])
+
+        self.assertEqual(user.guzi_wallet, 0)
+
+    def test_pay(self):
+        user = SimpleUser("", None)
+
+        user.pay(["1", "2", "3"])
+
+        self.assertEqual(user.balance["income"], 3)
+
+    def test_spend_to_should_raise_error_if_amount_is_negative(self):
+        user = SimpleUser("", None)
+
+        with self.assertRaises(ValueError):
+            user.spend_to(None, -10)
+
+    def test_spend_to_should_raise_error_if_user_cant_afford_it(self):
+        user = SimpleUser("", None)
+
+        with self.assertRaises(ValueError):
+            user.spend_to(None, 1)
+
+    def test_spend_to_should_increase_total_accumulated_directly_if_target_is_self(self):
+        user = SimpleUser("", None)
+        user.guzi_wallet = 10
+
+        user.spend_to(user, 10)
+
+        self.assertEqual(user.guzi_wallet, 0)
+        self.assertEqual(user.total_accumulated, 10)
+
+    def test_spend_to_should_pay_target(self):
+        source = SimpleUser("", None)
+        source.guzi_wallet = 10
+        target = SimpleUser("", None)
+        target.pay = MagicMock()
+
+        source.spend_to(target, 10)
+
+        target.pay.assert_called_with([GuziCreator.create_guzi(source, date(2000, 1, 1), i) for i in range(10)])
+        self.assertEqual(source.guzi_wallet, 0)
+
+    def test_check_balance(self):
+        user = SimpleUser("", None)
+        user.balance["income"] = 10
+        user.balance["outcome"] = 5
+
+        user.check_balance()
+
+        self.assertEqual(user.balance["income"], 5)
+        self.assertEqual(user.total_accumulated, 5)
+
+    def test_check_outdated_guzis(self):
+        user = SimpleUser("", None)
+        max_guzis = user.daily_guzis() * 30
+        user.guzi_wallet = max_guzis + 5
+        user.guza_wallet = max_guzis + 5
+
+        user.check_outdated_guzis(None)
+
+        self.assertEqual(user.guzi_wallet, max_guzis)
+        self.assertEqual(user.guza_wallet, max_guzis)
+        self.assertEqual(user.total_accumulated, 5)
+        self.assertEqual(user.guza_trashbin, 5)
+
+    def test_create_daily_guzis(self):
+        user = SimpleUser("", None)
+        user.total_accumulated = 27
+        expected = 4
+
+        user.create_daily_guzis(None)
+
+        self.assertEqual(user.guzi_wallet, expected)
+        self.assertEqual(user.guza_wallet, expected)
 
 
 class TestUserGenerator(unittest.TestCase):
@@ -289,3 +382,27 @@ class TestGrapheDrawer(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             drawer.draw()
+
+
+class TestRandomTrader(unittest.TestCase):
+    def test_init_should_set_the_user_pool(self):
+        user_pool = ["a", "b"]
+        trader = RandomTrader(user_pool)
+
+        self.assertEqual(trader.user_pool, user_pool)
+
+    def test_trade_guzis_with_count_should_reduce_N_guzi_wallet(self):
+        user_pool = UserGenerator.generate_users(date(2000, 1, 1), 10)
+        trader = RandomTrader(user_pool)
+        for u in user_pool:
+            for i in range(1, 10):
+                u.create_daily_guzis(date(2000, 1, i))
+
+        trader.trade_guzis(5)
+
+        user_who_spended = 0
+        for u in user_pool:
+            if u.guzi_wallet < 10:
+                user_who_spended += 1
+
+        self.assertEqual(user_who_spended, 5)
